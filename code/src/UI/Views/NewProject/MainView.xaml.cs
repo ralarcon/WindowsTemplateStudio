@@ -35,6 +35,14 @@ namespace Microsoft.Templates.UI.Views.NewProject
 
             Loaded += async (sender, e) =>
             {
+                PresentationSource source = PresentationSource.FromVisual(this);
+
+                double dpiX, dpiY;
+                if (source != null)
+                {
+                    dpiX = 96.0 * source.CompositionTarget.TransformToDevice.M11;
+                    dpiY = 96.0 * source.CompositionTarget.TransformToDevice.M22;
+                }
                 await ViewModel.InitializeAsync(stepFrame, summaryPageGroups);
             };
 
