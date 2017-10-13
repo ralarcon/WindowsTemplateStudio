@@ -1,31 +1,18 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 using System;
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 
 using Microsoft.Templates.Core.Gen;
 using Microsoft.Templates.Core.Mvvm;
+using Microsoft.Templates.UI.ViewModels.Common;
+using Microsoft.Templates.UI.Services;
 
 namespace Microsoft.Templates.UI.ViewModels.NewItem
 {
-    public enum FileStatus
-    {
-        NewFile, ModifiedFile, ConflictingFile, WarningFile, Unchanged
-    }
-    public enum FileExtension
-    {
-        Default, CSharp, Resw, Xaml, Xml, Csproj, Appxmanifest, Json, Jpg, Png, Jpeg
-    }
     public abstract class BaseFileViewModel : Observable
     {
         public string DetailTitle { get; protected set; }
@@ -36,54 +23,85 @@ namespace Microsoft.Templates.UI.ViewModels.NewItem
         public FileExtension FileExtension { get; private set; }
         public Func<string, string> UpdateTextAction { get; }
 
-        public string TempFile { get; set; }
-        public string ProjectFile { get; set; }
+        public string FailedPostaction
+        {
+            get
+            {
+                if (FileStatus == FileStatus.ConflictingStylesFile)
+                {
+                    var name = Subject.Replace(".xaml", string.Empty);
+                    return Path.Combine(GenContext.Current.OutputPath, $"{name}_failedpostaction.xaml");
+                }
 
-        public abstract FileStatus FileStatus { get; }
+                return string.Empty;
+            }
+        }
+
+        public string TempFile => Path.Combine(GenContext.Current.OutputPath, Subject);
+        public string ProjectFile => Path.Combine(GenContext.Current.ProjectPath, Subject);
+
+        private double _codeFontSize;
+        public double CodeFontSize
+        {
+            get => _codeFontSize;
+            set => SetProperty(ref _codeFontSize, value);
+        }
+
+        public FileStatus FileStatus { get; }
 
         public virtual string UpdateText(string fileText) => fileText;
 
-        // TODO: Review constructor to remove this suppresion. Important
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
-        public BaseFileViewModel(string name)
+        public BaseFileViewModel(string name, FileStatus fileStatus)
         {
             Subject = name;
+            FileStatus = fileStatus;
             LoadFile();
             UpdateTextAction = fileText => UpdateText(fileText);
+            CodeFontSize = SystemService.Instance.GetCodeFontSize();
         }
 
-        // TODO: Review constructor to remove this suppresion. Important
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
-        public BaseFileViewModel(NewItemGenerationFileInfo generationInfo)
+        public BaseFileViewModel(NewItemGenerationFileInfo generationInfo, FileStatus fileStatus)
         {
             Subject = generationInfo.Name;
+            FileStatus = fileStatus;
             LoadFile();
             UpdateTextAction = fileText => UpdateText(fileText);
+            CodeFontSize = SystemService.Instance.GetCodeFontSize();
         }
 
         private void LoadFile()
         {
-            TempFile = Path.Combine(GenContext.Current.OutputPath, Subject);
-            ProjectFile = Path.Combine(GenContext.Current.ProjectPath, Subject);
             FileExtension = GetFileExtension();
             Icon = GetIcon();
             CircleColor = GetCircleColor();
         }
 
+        public override string ToString()
+        {
+            return Subject ?? base.ToString();
+        }
+
         private SolidColorBrush GetCircleColor()
         {
+            if (Services.SystemService.Instance.IsHighContrast)
+            {
+                return SystemColors.InfoTextBrush;
+            }
+
             switch (FileStatus)
             {
                 case FileStatus.NewFile:
-                    return MainViewModel.Current.MainView.FindResource("UIGreen") as SolidColorBrush;
+                    return ResourceService.FindResource<SolidColorBrush>("UIGreen") as SolidColorBrush;
                 case FileStatus.ModifiedFile:
-                    return MainViewModel.Current.MainView.FindResource("UIBlue") as SolidColorBrush;
+                    return ResourceService.FindResource<SolidColorBrush>("UIBlue") as SolidColorBrush;
                 case FileStatus.ConflictingFile:
-                    return MainViewModel.Current.MainView.FindResource("UIRed") as SolidColorBrush;
+                    return ResourceService.FindResource<SolidColorBrush>("UIRed") as SolidColorBrush;
+                case FileStatus.ConflictingStylesFile:
+                    return ResourceService.FindResource<SolidColorBrush>("UIDarkYellow") as SolidColorBrush;
                 case FileStatus.WarningFile:
-                    return MainViewModel.Current.MainView.FindResource("UIDarkYellow") as SolidColorBrush;
+                    return ResourceService.FindResource<SolidColorBrush>("UIDarkYellow") as SolidColorBrush;
                 case FileStatus.Unchanged:
-                    return MainViewModel.Current.MainView.FindResource("UIDarkBlue") as SolidColorBrush;
+                    return ResourceService.FindResource<SolidColorBrush>("UIDarkBlue");
                 default:
                     return new SolidColorBrush(Colors.Transparent);
             }
@@ -104,7 +122,7 @@ namespace Microsoft.Templates.UI.ViewModels.NewItem
                 case ".csproj":
                     return FileExtension.Csproj;
                 case ".appxmanifest":
-                    return FileExtension.Appxmanifest;
+                    return FileExtension.AppXManifest;
                 case ".json":
                     return FileExtension.Json;
                 case ".jpg":
@@ -113,6 +131,10 @@ namespace Microsoft.Templates.UI.ViewModels.NewItem
                     return FileExtension.Jpeg;
                 case ".png":
                     return FileExtension.Png;
+                case ".vb":
+                    return FileExtension.Vb;
+                case ".vbproj":
+                    return FileExtension.Vbproj;
                 default:
                     return FileExtension.Default;
             }
@@ -136,6 +158,10 @@ namespace Microsoft.Templates.UI.ViewModels.NewItem
                     return "/Microsoft.Templates.UI;component/Assets/FileExtensions/Csproj.png";
                 case FileExtension.Json:
                     return "/Microsoft.Templates.UI;component/Assets/FileExtensions/Json.png";
+                case FileExtension.Vb:
+                    return "/Microsoft.Templates.UI;component/Assets/FileExtensions/VisualBasic.png";
+                case FileExtension.Vbproj:
+                    return "/Microsoft.Templates.UI;component/Assets/FileExtensions/VBProj.png";
                 default:
                     return "/Microsoft.Templates.UI;component/Assets/FileExtensions/DefaultFile.png";
             }

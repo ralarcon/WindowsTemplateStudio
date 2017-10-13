@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -27,8 +19,6 @@ namespace Microsoft.Templates.Core
 {
     public class CodeGen
     {
-        public const string BaseName = "BaseName";
-
         public static CodeGen Instance { get; private set; }
 
         public TemplateCreator Creator { get; }
@@ -54,18 +44,13 @@ namespace Microsoft.Templates.Core
             Instance.Init();
         }
 
-        ////public static void Initialize(string locationId)
-        ////{
-        ////    Initialize(locationId, GetHostVersion());
-        ////}
-
-        public string GetCurrentContentSource(string workingFolder)
+        public string GetCurrentContentSource(string workingFolder, string sourceId)
         {
-            string result = string.Empty;
+            var result = string.Empty;
 
             foreach (var mp in Instance?.Settings.SettingsLoader.MountPoints)
             {
-                if (Directory.Exists(mp.Place) && IsHigherVersion(result, mp.Place))
+                if (mp != null && Directory.Exists(mp.Place) && IsHigherVersion(result, mp.Place) && (mp.Place.IndexOf(sourceId, StringComparison.InvariantCultureIgnoreCase) != -1))
                 {
                     result = mp.Place;
                 }
@@ -105,16 +90,7 @@ namespace Microsoft.Templates.Core
 
         private static ITemplateEngineHost CreateHost(string locationId, string hostVersion)
         {
-            return new DefaultTemplateEngineHost($"{BaseName}_{locationId}", hostVersion, CultureInfo.CurrentUICulture.Name, new Dictionary<string, string>());
+            return new DefaultTemplateEngineHost($"{locationId}", hostVersion, CultureInfo.CurrentUICulture.Name, new Dictionary<string, string>());
         }
-
-        ////private static string GetHostVersion()
-        ////{
-        ////    string assemblyLocation = Assembly.GetExecutingAssembly().Location;
-        ////    var versionInfo = FileVersionInfo.GetVersionInfo(assemblyLocation);
-        ////    Version.TryParse(versionInfo.FileVersion, out Version v);
-
-        ////    return $"{v.Major}.{v.Minor}";
-        ////}
     }
 }

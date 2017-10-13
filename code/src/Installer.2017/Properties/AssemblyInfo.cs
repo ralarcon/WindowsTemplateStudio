@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Reflection;
 using System.Resources;
@@ -47,9 +39,3 @@ using Microsoft.VisualStudio.Shell;
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("0.0.0.0")]
 [assembly: NeutralResourcesLanguage("en-US", UltimateResourceFallbackLocation.Satellite)]
-[assembly: ProvideBindingRedirection(AssemblyName = "Microsoft.TemplateEngine.Abstractions", Culture = "neutral", OldVersionLowerBound = "1.0.0.0", OldVersionUpperBound = "1.0.0.234", NewVersion = "1.0.0.234")]
-[assembly: ProvideBindingRedirection(AssemblyName = "Microsoft.TemplateEngine.Edge", Culture = "neutral", OldVersionLowerBound = "1.0.0.0", OldVersionUpperBound = "1.0.0.234", NewVersion = "1.0.0.234")]
-[assembly: ProvideBindingRedirection(AssemblyName = "Microsoft.TemplateEngine.Utils", Culture = "neutral", OldVersionLowerBound = "1.0.0.0", OldVersionUpperBound = "1.0.0.234", NewVersion = "1.0.0.234")]
-[assembly: ProvideBindingRedirection(AssemblyName = "Microsoft.TemplateEngine.Orchestrator.RunnableProjects", Culture = "neutral", OldVersionLowerBound = "1.0.0.0", OldVersionUpperBound = "1.0.0.234", NewVersion = "1.0.0.234")]
-[assembly: ProvideBindingRedirection(AssemblyName = "Microsoft.TemplateEngine.Core", Culture = "neutral", OldVersionLowerBound = "1.0.0.0", OldVersionUpperBound = "1.0.0.234", NewVersion = "1.0.0.234")]
-[assembly: ProvideBindingRedirection(AssemblyName = "Microsoft.TemplateEngine.Core.Contracts", Culture = "neutral", OldVersionLowerBound = "1.0.0.0", OldVersionUpperBound = "1.0.0.234", NewVersion = "1.0.0.234")]

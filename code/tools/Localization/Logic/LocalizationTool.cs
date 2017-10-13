@@ -1,60 +1,115 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Localization.Options;
 
 namespace Localization
 {
     internal class LocalizationTool
     {
+        private List<string> cultures = new List<string> { "cs-CZ", "de-DE", "es-ES", "fr-FR", "it-IT", "ja-JP", "ko-KR", "pl-PL", "pt-BR", "ru-RU", "tr-TR", "zh-CN", "zh-TW" };
         public LocalizationTool()
         {
         }
 
-        public void GenerateProjectTemplatesAndCommandsHandler(ToolCommandInfo commandInfo)
+        public void GenerateProjectTemplatesAndCommandsHandler(GenerationOptions options)
         {
-            if (commandInfo.Arguments == null || commandInfo.Arguments.Length < 3)
+            if (CanOverwriteDirectory(options.DestinationDirectory))
             {
-                throw new Exception("Error executing command. Too few arguments.");
-            }
-            string sourceDirectory = commandInfo.Arguments[0];
-            string destinationDirectory = commandInfo.Arguments[1];
-            List<string> cultures = new List<string>(commandInfo.Arguments[2].Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries));
-            ProjectTemplateGenerator projectTemplateGenerator = new ProjectTemplateGenerator(sourceDirectory, destinationDirectory);
-            projectTemplateGenerator.GenerateProjectTemplates(cultures);
-            RightClickCommandGenerator rightClickCommandGenerator = new RightClickCommandGenerator(sourceDirectory, destinationDirectory);
-            rightClickCommandGenerator.GenerateRightClickCommands(cultures);
+                Stopwatch stopwatch = new Stopwatch();
+                stopwatch.Start();
+
+                Console.WriteLine("\nGenerate C# project templates.");
+                var csProjectTemplateGenerator = new CSharpProjectTemplateGenerator(options.SourceDirectory, options.DestinationDirectory);
+                csProjectTemplateGenerator.GenerateProjectTemplates(cultures);
+
+                Console.WriteLine("\nGenerate VB project templates.");
+                var vbProjectTemplateGenerator = new VisualBasicProjectTemplateGenerator(options.SourceDirectory, options.DestinationDirectory);
+                vbProjectTemplateGenerator.GenerateProjectTemplates(cultures);
+
+                Console.WriteLine("\nGenerate right click commands.");
+                var rightClickCommandGenerator = new RightClickCommandGenerator(options.SourceDirectory, options.DestinationDirectory);
+                rightClickCommandGenerator.GenerateRightClickCommands(cultures);
+
+            Console.WriteLine("End");
+            stopwatch.Stop();
+            TimeSpan ts = stopwatch.Elapsed;
+            Console.WriteLine(string.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10));
+        }
         }
 
-        public void ExtractLocalizableItems(ToolCommandInfo commandInfo)
+        public void ExtractLocalizableItems(ExtractOptions options)
         {
-            if (commandInfo.Arguments == null || commandInfo.Arguments.Length < 3)
+            if (CanOverwriteDirectory(options.DestinationDirectory))
             {
-                throw new Exception("Error executing command. Too few arguments.");
+                Stopwatch stopwatch = new Stopwatch();
+                stopwatch.Start();
+
+                var validator = new ValidateLocalizableExtractor(options);
+                var extractor = new LocalizableItemsExtractor(options.SourceDirectory, options.DestinationDirectory, cultures, validator);
+
+                Console.WriteLine("\nExtract vsix");
+                extractor.ExtractVsix();
+
+                Console.WriteLine("Extract project templates");
+                extractor.ExtractProjectTemplates();
+
+                Console.WriteLine("Extract command templates");
+                extractor.ExtractCommandTemplates();
+
+                Console.WriteLine("Extract template pages");
+                extractor.ExtractTemplatePages();
+
+                Console.WriteLine("Extract template features");
+                extractor.ExtractTemplateFeatures();
+
+                Console.WriteLine("Extract project types");
+                extractor.ExtractWtsProjectTypes();
+
+                Console.WriteLine("Extract project frameworks");
+                extractor.ExtractWtsFrameworks();
+
+                Console.WriteLine("Extract resources");
+                extractor.ExtractResourceFiles();
+
+                Console.WriteLine("End");
+                stopwatch.Stop();
+                TimeSpan ts = stopwatch.Elapsed;
+                Console.WriteLine(string.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10));
             }
-            string sourceDirectory = commandInfo.Arguments[0];
-            string destinationDirectory = commandInfo.Arguments[1];
-            List<string> cultures = new List<string>(commandInfo.Arguments[2].Split(new string[] { ";" }, StringSplitOptions.RemoveEmptyEntries));
-            LocalizableItemsExtractor extractor = new LocalizableItemsExtractor(sourceDirectory, destinationDirectory);
-            extractor.ExtractVsix(cultures);
-            extractor.ExtractProjectTemplates(cultures);
-            extractor.ExtractCommandTemplates(cultures);
-            extractor.ExtractTemplateEngineTemplates(cultures);
-            extractor.ExtractWtsTemplates(cultures);
-            extractor.ExtractResourceFiles(cultures);
+        }
+
+        public bool VerifyLocalizableItems(VerifyOptions options)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            var verificator = new LocalizableItemsVerificator(options.SourceDirectory, cultures);
+            bool result = verificator.VerificateAllFiles();
+
+            Console.WriteLine("End");
+            stopwatch.Stop();
+            TimeSpan ts = stopwatch.Elapsed;
+            Console.WriteLine(string.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10));
+
+            return result;
+        }
+
+        private bool CanOverwriteDirectory(string destDirectory)
+        {
+            if (!Directory.Exists(destDirectory) || !Directory.EnumerateFileSystemEntries(destDirectory).Any())
+            {
+                return true;
+            }
+
+            Console.WriteLine("\nTarget directory is not empty. Existing files will be overwritten. Continue? (Y/N)");
+            return Console.ReadLine().ToUpperInvariant() == "Y";
         }
     }
 }

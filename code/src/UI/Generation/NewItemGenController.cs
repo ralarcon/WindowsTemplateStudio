@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -16,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -63,7 +56,7 @@ namespace Microsoft.Templates.UI
                 }
                 else
                 {
-                    AppHealth.Current.Telemetry.TrackWizardCancelledAsync(WizardTypeEnum.AddFeature).FireAndForget();
+                    AppHealth.Current.Telemetry.TrackWizardCancelledAsync(WizardTypeEnum.AddFeature, GenContext.ToolBox.Shell.GetVsVersion()).FireAndForget();
                 }
             }
             catch (Exception ex) when (!(ex is WizardBackoutException))
@@ -94,7 +87,7 @@ namespace Microsoft.Templates.UI
                 }
                 else
                 {
-                    AppHealth.Current.Telemetry.TrackWizardCancelledAsync(WizardTypeEnum.AddPage).FireAndForget();
+                    AppHealth.Current.Telemetry.TrackWizardCancelledAsync(WizardTypeEnum.AddPage, GenContext.ToolBox.Shell.GetVsVersion()).FireAndForget();
                 }
             }
             catch (Exception ex) when (!(ex is WizardBackoutException))
@@ -139,7 +132,7 @@ namespace Microsoft.Templates.UI
             var result = new TempGenerationResult();
             var files = Directory
                 .EnumerateFiles(GenContext.Current.OutputPath, "*", SearchOption.AllDirectories)
-                .Where(f => !Regex.IsMatch(f, MergePostAction.PostactionRegex) && !Regex.IsMatch(f, MergePostAction.FailedPostactionRegex))
+                .Where(f => !Regex.IsMatch(f, MergeConfiguration.PostactionRegex) && !Regex.IsMatch(f, MergeConfiguration.FailedPostactionRegex))
                 .ToList();
 
             foreach (var file in files)
@@ -243,10 +236,12 @@ namespace Microsoft.Templates.UI
             if (userSelection.ItemGenerationType == ItemGenerationType.GenerateAndMerge)
             {
                 // BackupProjectFiles
+                compareResult.SyncGeneration = true;
                 ExecuteSyncGenerationPostActions(compareResult);
             }
             else
             {
+                compareResult.SyncGeneration = false;
                 ExecuteOutputGenerationPostActions(compareResult);
             }
         }
@@ -294,7 +289,7 @@ namespace Microsoft.Templates.UI
 
             Fs.EnsureFolder(backupFolder);
 
-            File.WriteAllText(fileName, JsonConvert.SerializeObject(result));
+            File.WriteAllText(fileName, JsonConvert.SerializeObject(result), Encoding.UTF8);
 
             var modifiedFiles = result.ConflictingFiles.Concat(result.ModifiedFiles);
 
@@ -362,11 +357,11 @@ namespace Microsoft.Templates.UI
             switch (generationType)
             {
                 case ItemGenerationType.Generate:
-                    AppHealth.Current.Telemetry.TrackWizardCompletedAsync(wizardType, WizardActionEnum.GenerateItem).FireAndForget();
+                    AppHealth.Current.Telemetry.TrackWizardCompletedAsync(wizardType, WizardActionEnum.GenerateItem, GenContext.ToolBox.Shell.GetVsVersion()).FireAndForget();
 
                     break;
                 case ItemGenerationType.GenerateAndMerge:
-                    AppHealth.Current.Telemetry.TrackWizardCompletedAsync(wizardType, WizardActionEnum.GenerateAndMergeItem).FireAndForget();
+                    AppHealth.Current.Telemetry.TrackWizardCompletedAsync(wizardType, WizardActionEnum.GenerateAndMergeItem, GenContext.ToolBox.Shell.GetVsVersion()).FireAndForget();
                     break;
                 default:
                     break;

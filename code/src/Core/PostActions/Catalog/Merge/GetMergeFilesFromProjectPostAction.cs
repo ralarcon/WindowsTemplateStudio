@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
 using System.IO;
@@ -20,13 +12,14 @@ namespace Microsoft.Templates.Core.PostActions.Catalog.Merge
 {
     public class GetMergeFilesFromProjectPostAction : PostAction<string>
     {
-        public GetMergeFilesFromProjectPostAction(string config) : base(config)
+        public GetMergeFilesFromProjectPostAction(string config)
+            : base(config)
         {
         }
 
         public override void Execute()
         {
-            if (Regex.IsMatch(_config, MergePostAction.GlobalExtension))
+            if (Regex.IsMatch(_config, MergeConfiguration.GlobalExtension))
             {
                 GetFileFromProject();
             }
@@ -63,16 +56,16 @@ namespace Microsoft.Templates.Core.PostActions.Catalog.Merge
 
         private string GetMergeFileFromDirectory(string directory)
         {
-            if (Path.GetFileName(_config).StartsWith(MergePostAction.Extension))
+            if (Path.GetFileName(_config).StartsWith(MergeConfiguration.Extension))
             {
                 var extension = Path.GetExtension(_config);
 
-                return Directory.EnumerateFiles(directory, $"*{extension}").FirstOrDefault(f => !Regex.IsMatch(f, MergePostAction.PostactionRegex));
+                return Directory.EnumerateFiles(directory, $"*{extension}").FirstOrDefault(f => !Regex.IsMatch(f, MergeConfiguration.PostactionRegex));
             }
             else
             {
                 var filePath = Path.Combine(directory, Path.GetFileName(_config));
-                var path = Regex.Replace(filePath, MergePostAction.PostactionRegex, ".");
+                var path = Regex.Replace(filePath, MergeConfiguration.PostactionRegex, ".");
 
                 return path;
             }

@@ -1,17 +1,10 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using EnvDTE;
 using Microsoft.Templates.Core;
 using Microsoft.Templates.Core.Diagnostics;
@@ -20,13 +13,15 @@ using Microsoft.Templates.Core.Locations;
 using Microsoft.Templates.Core.PostActions.Catalog.Merge;
 using Microsoft.Templates.UI.Resources;
 using Microsoft.VisualStudio.TemplateWizard;
+using Microsoft.Templates.UI.Threading;
 
 namespace Microsoft.Templates.UI.VisualStudio
 {
-    public class SolutionWizard : IWizard, IContextProvider
+    public abstract class SolutionWizard : IWizard, IContextProvider
     {
         private UserSelection _userSelection;
         private Dictionary<string, string> _replacementsDictionary;
+        private string _language;
 
         public string ProjectName => _replacementsDictionary["$safeprojectname$"];
 
@@ -39,16 +34,21 @@ namespace Microsoft.Templates.UI.VisualStudio
         public List<FailedMergePostAction> FailedMergePostActions { get; } = new List<FailedMergePostAction>();
 
         public Dictionary<string, List<MergeInfo>> MergeFilesFromProject { get; } = new Dictionary<string, List<MergeInfo>>();
+
         public List<string> FilesToOpen { get; } = new List<string>();
 
-        public SolutionWizard()
+        public Dictionary<ProjectMetricsEnum, double> ProjectMetrics { get; private set; } = new Dictionary<ProjectMetricsEnum, double>();
+
+        protected void Initialize(string language)
         {
-            if (!GenContext.IsInitialized)
+            _language = language;
+
+            if (GenContext.InitializedLanguage != language)
             {
 #if DEBUG
-                GenContext.Bootstrap(new LocalTemplatesSource(), new VsGenShell());
+                GenContext.Bootstrap(new LocalTemplatesSource(), new VsGenShell(), language);
 #else
-                GenContext.Bootstrap(new RemoteTemplatesSource(), new VsGenShell());
+                GenContext.Bootstrap(new RemoteTemplatesSource(), new VsGenShell(), language);
 #endif
                 }
         }
@@ -65,10 +65,15 @@ namespace Microsoft.Templates.UI.VisualStudio
         {
         }
 
-        public async void RunFinished()
+        public void RunFinished()
         {
             AppHealth.Current.Info.TrackAsync(StringRes.SolutionWizardRunFinishedMessage).FireAndForget();
-            await NewProjectGenController.Instance.GenerateProjectAsync(_userSelection);
+            SafeThreading.JoinableTaskFactory.Run(async () =>
+            {
+                await SafeThreading.JoinableTaskFactory.SwitchToMainThreadAsync();
+                await NewProjectGenController.Instance.GenerateProjectAsync(_userSelection);
+            });
+
             AppHealth.Current.Info.TrackAsync(StringRes.GenerationFinishedString).FireAndForget();
 
             PostGenerationActions();
@@ -84,8 +89,6 @@ namespace Microsoft.Templates.UI.VisualStudio
 
         public void RunStarted(object automationObject, Dictionary<string, string> replacementsDictionary, WizardRunKind runKind, object[] customParams)
         {
-            var solutionDirectory = replacementsDictionary["$solutiondirectory$"];
-
             try
             {
                 if (runKind == WizardRunKind.AsNewProject || runKind == WizardRunKind.AsMultiProject)
@@ -99,10 +102,10 @@ namespace Microsoft.Templates.UI.VisualStudio
             }
             catch (WizardBackoutException)
             {
-                if (Directory.Exists(solutionDirectory))
-                {
-                    Directory.Delete(solutionDirectory, true);
-                }
+                var projectDirectory = replacementsDictionary["$destinationdirectory$"];
+                var solutionDirectory = replacementsDictionary["$solutiondirectory$"];
+
+                CleanupDirectories(projectDirectory, solutionDirectory);
 
                 throw;
             }
@@ -111,6 +114,18 @@ namespace Microsoft.Templates.UI.VisualStudio
         public bool ShouldAddProjectItem(string filePath)
         {
             return true;
+        }
+
+        private void CleanupDirectories(string projectDirectory, string solutionDirectory)
+        {
+            Fs.SafeDeleteDirectory(projectDirectory);
+
+            if (Directory.Exists(solutionDirectory)
+                && !Directory.EnumerateDirectories(solutionDirectory).Any()
+                && !Directory.EnumerateFiles(solutionDirectory).Any())
+            {
+                Fs.SafeDeleteDirectory(solutionDirectory);
+            }
         }
     }
 }

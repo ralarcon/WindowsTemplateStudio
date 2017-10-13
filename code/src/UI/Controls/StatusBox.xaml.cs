@@ -1,17 +1,8 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -35,14 +26,16 @@ namespace Microsoft.Templates.UI.Controls
             get { return (StatusViewModel)GetValue(StatusProperty); }
             set { SetValue(StatusProperty, value); }
         }
-        public static readonly DependencyProperty StatusProperty = DependencyProperty.Register("Status", typeof(StatusViewModel), typeof(StatusBox), new PropertyMetadata(null, OnStatusPropertyChanged));
+
+        public static readonly DependencyProperty StatusProperty = DependencyProperty.Register(nameof(Status), typeof(StatusViewModel), typeof(StatusBox), new PropertyMetadata(null, OnStatusPropertyChanged));
 
         public ICommand CloseCommand
         {
             get { return (ICommand)GetValue(CloseCommandProperty); }
             private set { SetValue(CloseCommandProperty, value); }
         }
-        public static readonly DependencyProperty CloseCommandProperty = DependencyProperty.Register("CloseCommand", typeof(ICommand), typeof(StatusBox), new PropertyMetadata(null));
+
+        public static readonly DependencyProperty CloseCommandProperty = DependencyProperty.Register(nameof(CloseCommand), typeof(ICommand), typeof(StatusBox), new PropertyMetadata(null));
 
         private static void OnStatusPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
@@ -65,7 +58,7 @@ namespace Microsoft.Templates.UI.Controls
 
         private void OnHideTimerTick(object sender, EventArgs e)
         {
-            this.FadeOut();
+            HideStatus();
             _hideTimer.Stop();
         }
 
@@ -79,6 +72,7 @@ namespace Microsoft.Templates.UI.Controls
         {
             if (isVisible)
             {
+                Visibility = Visibility.Visible;
                 Panel.SetZIndex(this, 2);
                 closeButton.Focusable = true;
                 if (autoHideSeconds > 0)
@@ -86,14 +80,25 @@ namespace Microsoft.Templates.UI.Controls
                     _hideTimer.Interval = TimeSpan.FromSeconds(autoHideSeconds);
                     _hideTimer.Start();
                 }
+                else
+                {
+                    _hideTimer.Stop();
+                }
+
                 this.FadeIn();
             }
             else
             {
-                Panel.SetZIndex(this, 0);
-                closeButton.Focusable = false;
-                this.FadeOut(0);
+                HideStatus();
             }
+        }
+
+        private void HideStatus()
+        {
+            this.FadeOut(0);
+            Panel.SetZIndex(this, 0);
+            closeButton.Focusable = false;
+            Visibility = Visibility.Collapsed;
         }
     }
 }

@@ -1,19 +1,12 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Templates.Core.Gen;
 
@@ -23,16 +16,8 @@ namespace Microsoft.Templates.Core.PostActions.Catalog.Merge
 {
     public class MergePostAction : PostAction<MergeConfiguration>
     {
-        private const string Suffix = "postaction";
-        private const string NewSuffix = "failedpostaction";
-
-        public const string Extension = "_" + Suffix + ".";
-        public const string GlobalExtension = "$*_g" + Suffix + ".";
-
-        public const string PostactionRegex = @"(\$\S*)?(_" + Suffix + "|_g" + Suffix + @")\.";
-        public const string FailedPostactionRegex = @"(\$\S*)?(_" + NewSuffix + "|_g" + NewSuffix + @")(\d)?\.";
-
-        public MergePostAction(MergeConfiguration config) : base(config)
+        public MergePostAction(MergeConfiguration config)
+            : base(config)
         {
         }
 
@@ -73,9 +58,12 @@ namespace Microsoft.Templates.Core.PostActions.Catalog.Merge
             else
             {
                 Fs.EnsureFileEditable(originalFilePath);
-                File.WriteAllLines(originalFilePath, result);
+                File.WriteAllLines(originalFilePath, result, Encoding.UTF8);
+
                 // REFRESH PROJECT TO UN-DIRTY IT
-                if (Path.GetExtension(_config.FilePath).Equals(".csproj", StringComparison.OrdinalIgnoreCase) && (GenContext.Current.OutputPath == GenContext.Current.ProjectPath))
+                if ((Path.GetExtension(_config.FilePath).Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+                   || Path.GetExtension(_config.FilePath).Equals(".vbproj", StringComparison.OrdinalIgnoreCase))
+                  && (GenContext.Current.OutputPath == GenContext.Current.ProjectPath))
                 {
                     Gen.GenContext.ToolBox.Shell.RefreshProject();
                 }
@@ -84,35 +72,40 @@ namespace Microsoft.Templates.Core.PostActions.Catalog.Merge
             File.Delete(_config.FilePath);
         }
 
+        protected void AddFailedMergePostActions(string originalFilePath, MergeFailureType mergeFailureType, string description)
+        {
+            var sourceFileName = GetRelativePath(originalFilePath);
+            var postactionFileName = GetRelativePath(_config.FilePath);
+
+            var failedFileName = GetFailedPostActionFileName();
+            GenContext.Current.FailedMergePostActions.Add(new FailedMergePostAction(sourceFileName, _config.FilePath, failedFileName, description, mergeFailureType));
+            File.Copy(_config.FilePath, failedFileName, true);
+        }
+
+        protected string GetRelativePath(string path)
+        {
+            return path.Replace(GenContext.Current.OutputPath + Path.DirectorySeparatorChar, string.Empty);
+        }
+
         private void AddFailedMergePostActionsFileNotFound(string originalFilePath)
         {
-            var sourceFileName = originalFilePath.Replace(GenContext.Current.OutputPath + Path.DirectorySeparatorChar, string.Empty);
-            var postactionFileName = _config.FilePath.Replace(GenContext.Current.OutputPath + Path.DirectorySeparatorChar, string.Empty);
-
-            var description = string.Format(StringRes.FailedMergePostActionFileNotFound, sourceFileName);
-            var failedFileName = GetFailedPostActionFileName();
-            GenContext.Current.FailedMergePostActions.Add(new FailedMergePostAction(sourceFileName, _config.FilePath, failedFileName, description, MergeFailureType.FileNotFound));
-            File.Copy(_config.FilePath, failedFileName, true);
+            var description = string.Format(StringRes.FailedMergePostActionFileNotFound, GetRelativePath(originalFilePath));
+            AddFailedMergePostActions(originalFilePath,  MergeFailureType.FileNotFound, description);
         }
 
         private void AddFailedMergePostActionsAddLineNotFound(string originalFilePath, string errorLine)
         {
-            var sourceFileName = originalFilePath.Replace(GenContext.Current.OutputPath + Path.DirectorySeparatorChar, string.Empty);
-
-            var postactionFileName = _config.FilePath.Replace(GenContext.Current.OutputPath + Path.DirectorySeparatorChar, string.Empty);
-            var description = string.Format(StringRes.FailedMergePostActionLineNotFound, errorLine.Trim(), sourceFileName);
-            var failedFileName = GetFailedPostActionFileName();
-            GenContext.Current.FailedMergePostActions.Add(new FailedMergePostAction(sourceFileName, _config.FilePath, failedFileName, description, MergeFailureType.LineNotFound));
-            File.Copy(_config.FilePath, failedFileName, true);
+            var description = string.Format(StringRes.FailedMergePostActionLineNotFound, errorLine.Trim(), GetRelativePath(originalFilePath));
+            AddFailedMergePostActions(originalFilePath, MergeFailureType.LineNotFound, description);
         }
 
         private string GetFailedPostActionFileName()
         {
-            var newFileName = Path.GetFileNameWithoutExtension(_config.FilePath).Replace(Suffix, NewSuffix);
+            var newFileName = Path.GetFileNameWithoutExtension(_config.FilePath).Replace(MergeConfiguration.Suffix, MergeConfiguration.NewSuffix);
             var folder = Path.GetDirectoryName(_config.FilePath);
             var extension = Path.GetExtension(_config.FilePath);
 
-            var validator = new List<Validator>()
+            var validator = new List<Validator>
             {
                 new FileExistsValidator(Path.GetDirectoryName(_config.FilePath))
             };
@@ -123,16 +116,16 @@ namespace Microsoft.Templates.Core.PostActions.Catalog.Merge
 
         private string GetFilePath()
         {
-            if (Path.GetFileName(_config.FilePath).StartsWith(Extension))
+            if (Path.GetFileName(_config.FilePath).StartsWith(MergeConfiguration.Extension, StringComparison.InvariantCultureIgnoreCase))
             {
                 var extension = Path.GetExtension(_config.FilePath);
                 var directory = Path.GetDirectoryName(_config.FilePath);
 
-                return Directory.EnumerateFiles(directory, $"*{extension}").FirstOrDefault(f => !f.Contains(Suffix));
+                return Directory.EnumerateFiles(directory, $"*{extension}").FirstOrDefault(f => !f.Contains(MergeConfiguration.Suffix));
             }
             else
             {
-                var path = Regex.Replace(_config.FilePath, PostactionRegex, ".");
+                var path = Regex.Replace(_config.FilePath, MergeConfiguration.PostactionRegex, ".");
 
                 return path;
             }

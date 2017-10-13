@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -51,7 +43,7 @@ namespace Microsoft.Templates.Core.Diagnostics
 
         private TelemetryService(Configuration config)
         {
-            _currentConfig = config ?? throw new ArgumentNullException("config");
+            _currentConfig = config ?? throw new ArgumentNullException(nameof(config));
 
             IntializeTelemetryClient();
         }
@@ -168,7 +160,7 @@ namespace Microsoft.Templates.Core.Diagnostics
                     vsCulture = VsTelem.TelemetryService.DefaultSession?.GetSharedProperty("VS.Core.Locale.ProductLocaleName");
                     vsManifestId = VsTelem.TelemetryService.DefaultSession?.GetSharedProperty("VS.Core.ManifestId");
 
-                    return isOptedIn;
+                    result = isOptedIn;
                 }
                 else
                 {
@@ -185,7 +177,7 @@ namespace Microsoft.Templates.Core.Diagnostics
             }
 
             _client.Context.Properties.Add(TelemetryProperties.VisualStudioEdition, vsEdition);
-            _client.Context.Properties.Add(TelemetryProperties.VisualStudioVersion, vsVersion);
+            _client.Context.Properties.Add(TelemetryProperties.VisualStudioExeVersion, vsVersion);
             _client.Context.Properties.Add(TelemetryProperties.VisualStudioCulture, vsCulture);
             _client.Context.Properties.Add(TelemetryProperties.VisualStudioManifestId, vsManifestId);
             return result;
@@ -229,6 +221,21 @@ namespace Microsoft.Templates.Core.Diagnostics
                 else
                 {
                     _client.Context.Properties[TelemetryProperties.WizardContentVersion] = wizardContentVersion.ToString();
+                }
+            }
+        }
+
+        public void SetContentVsProductVersionToContext(string vsProductVersion)
+        {
+            if (!string.IsNullOrEmpty(vsProductVersion) && _client != null && _client.Context != null && _client.Context.Properties != null)
+            {
+                if (!_client.Context.Properties.ContainsKey(TelemetryProperties.VisualStudioProductVersion))
+                {
+                    _client.Context.Properties.Add(TelemetryProperties.VisualStudioProductVersion, vsProductVersion);
+                }
+                else
+                {
+                    _client.Context.Properties[TelemetryProperties.VisualStudioProductVersion] = vsProductVersion;
                 }
             }
         }
@@ -289,6 +296,7 @@ namespace Microsoft.Templates.Core.Diagnostics
                 Trace.TraceInformation($"Exception tracking New Item Creation in VsTelemetry:\r\n" + ex.ToString());
             }
         }
+
         private void TrackNewItemVsTelemetry(Dictionary<string, string> properties, string pageIdentities, string featureIdentities, Dictionary<string, double> metrics, bool success = true)
         {
             VsTelem.TelemetryResult result = success ? VsTelem.TelemetryResult.Success : VsTelem.TelemetryResult.Failure;
@@ -303,6 +311,7 @@ namespace Microsoft.Templates.Core.Diagnostics
                     e.Properties[renamedKey] = properties[key];
                 }
             }
+
             e.Properties.Add(VsTelemetryProperties.Pages, pageIdentities);
             e.Properties.Add(VsTelemetryProperties.Features, featureIdentities);
 
@@ -314,14 +323,33 @@ namespace Microsoft.Templates.Core.Diagnostics
 
             VsTelem.TelemetryService.DefaultSession.PostEvent(e);
         }
+
         private async Task SafeExecuteAsync(Action action)
         {
             try
             {
-                var task = Task.Run(() =>
+                var task = Task.Run(action);
+
+                await task;
+            }
+            catch (AggregateException aggEx)
+            {
+                foreach (var ex in aggEx.InnerExceptions)
                 {
-                    action();
-                });
+                    Trace.TraceError($"Error tracking telemetry: {ex}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"Error tracking telemetry: {ex}");
+            }
+        }
+
+        private async Task SafeExecuteAsync(Func<Task> action)
+        {
+            try
+            {
+                var task = Task.Run(action);
 
                 await task;
             }
@@ -329,12 +357,12 @@ namespace Microsoft.Templates.Core.Diagnostics
             {
                 foreach (Exception ex in aggEx.InnerExceptions)
                 {
-                    Trace.TraceError("Error tracking telemetry: {0}", ex.ToString());
+                    Trace.TraceError($"Error tracking telemetry: {ex}");
                 }
             }
             catch (Exception ex)
             {
-                Trace.TraceError("Error tracking telemetry: {0}", ex.ToString());
+                Trace.TraceError($"Error tracking telemetry: {ex}");
             }
         }
 
@@ -411,6 +439,7 @@ namespace Microsoft.Templates.Core.Diagnostics
                 // free managed resources
                 Flush();
             }
+
             // free native resources if any
         }
     }

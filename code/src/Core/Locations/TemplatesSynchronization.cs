@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.IO;
@@ -28,33 +20,45 @@ namespace Microsoft.Templates.Core.Locations
         private static readonly string FolderName = Configuration.Current.RepositoryFolderName;
 
         private readonly Lazy<string> _workingFolder = new Lazy<string>(() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), FolderName));
+
         private readonly TemplatesSource _source;
+
         private readonly TemplatesContent _content;
+
+        private static object syncLock = new object();
+
+        private readonly TimeSpan instanceSyncWait = new TimeSpan(0, 0, 5);
+
+        private readonly TimeSpan instanceMaxSyncWait = new TimeSpan(0, 0, 30);
 
         public string WorkingFolder => _workingFolder.Value;
 
         public string CurrentTemplatesFolder { get => _content?.TemplatesFolder; }
+
         public string CurrentContentFolder { get; private set; }
+
         public Version CurrentContentVersion { get => GetCurrentContentVersion(); }
+
         public Version CurrentWizardVersion { get; private set; }
 
-        private static object syncLock = new object();
         public static bool SyncInProgress { get; private set; }
 
         public TemplatesSynchronization(TemplatesSource source, Version wizardVersion)
         {
-            _source = source ?? throw new ArgumentNullException("location");
+            _source = source ?? throw new ArgumentNullException(nameof(source));
             _content = new TemplatesContent(WorkingFolder, source.Id, wizardVersion);
-            CurrentContentFolder = CodeGen.Instance?.GetCurrentContentSource(WorkingFolder);
+            CurrentContentFolder = CodeGen.Instance?.GetCurrentContentSource(WorkingFolder, source.Id);
         }
 
-        public async Task Do()
+        public async Task DoAsync()
         {
+            await EnsureVsInstancesSyncingAsync();
+
             if (LockSync())
             {
                 try
                 {
-                    await CheckInstallDeployedContent();
+                    await CheckInstallDeployedContentAsync();
 
                     var acquireCalled = await CheckMandatoryAcquireContentAsync();
 
@@ -101,18 +105,19 @@ namespace Microsoft.Templates.Core.Locations
 
         private async Task CheckContentStatusAsync()
         {
-            await CheckContentUnderVersion();
+            await CheckContentUnderVersionAsync();
             await CheckNewVersionAvailableAsync();
-            await CheckContentOverVersion();
+            await CheckContentOverVersionAsync();
         }
 
-        private async Task CheckInstallDeployedContent()
+        private async Task CheckInstallDeployedContentAsync()
         {
             if (!_content.Exists() || RequireExtractInstalledContent())
             {
                 await ExtractInstalledContentAsync();
             }
         }
+
         private async Task<bool> CheckMandatoryAcquireContentAsync()
         {
             return await AcquireContentAsync(_source.ForcedAcquisition || _content.ExistUnderVersion());
@@ -132,6 +137,7 @@ namespace Microsoft.Templates.Core.Locations
                 acquireContentCalled = true;
                 SyncStatusChanged?.Invoke(this, new SyncStatusEventArgs { Status = SyncStatus.Acquired });
             }
+
             return await Task.FromResult<bool>(acquireContentCalled);
         }
 
@@ -160,8 +166,11 @@ namespace Microsoft.Templates.Core.Locations
         {
             try
             {
-                 string installedTemplatesPath = GetInstalledTemplatesPath();
-                _source.Extract(installedTemplatesPath, _content.TemplatesFolder);
+                string installedTemplatesPath = GetInstalledTemplatesPath();
+                if (File.Exists(installedTemplatesPath))
+                {
+                    _source.Extract(installedTemplatesPath, _content.TemplatesFolder);
+                }
             }
             catch (Exception ex)
             {
@@ -183,7 +192,7 @@ namespace Microsoft.Templates.Core.Locations
             SyncStatusChanged?.Invoke(this, new SyncStatusEventArgs { Status = SyncStatus.Updated });
         }
 
-        private async Task CheckContentOverVersion()
+        private async Task CheckContentOverVersionAsync()
         {
             await Task.Run(() =>
             {
@@ -201,7 +210,7 @@ namespace Microsoft.Templates.Core.Locations
             });
         }
 
-        private async Task CheckContentUnderVersion()
+        private async Task CheckContentUnderVersionAsync()
         {
             await Task.Run(() =>
             {
@@ -236,7 +245,7 @@ namespace Microsoft.Templates.Core.Locations
 
                     CodeGen.Instance.Settings.SettingsLoader.Save();
 
-                    CurrentContentFolder = CodeGen.Instance.GetCurrentContentSource(WorkingFolder);
+                    CurrentContentFolder = CodeGen.Instance.GetCurrentContentSource(WorkingFolder, _source.Id);
                 }
             }
             catch (Exception ex)
@@ -261,6 +270,7 @@ namespace Microsoft.Templates.Core.Locations
         {
             return CurrentContentVersion.IsNull() || CurrentContentVersion < _source.GetVersionFromMstx(GetInstalledTemplatesPath());
         }
+
         private Version GetCurrentContentVersion()
         {
             return _content?.GetVersionFromFolder(CurrentContentFolder);
@@ -274,8 +284,10 @@ namespace Microsoft.Templates.Core.Locations
                 {
                     return false;
                 }
+
+                SetInstanceSyncLock();
                 SyncInProgress = true;
-                return true;
+                return SyncInProgress;
             }
         }
 
@@ -284,6 +296,67 @@ namespace Microsoft.Templates.Core.Locations
             lock (syncLock)
             {
                 SyncInProgress = false;
+                RemoveInstanceSyncLock();
+            }
+        }
+
+        private async Task EnsureVsInstancesSyncingAsync()
+        {
+            while (IsOtherInstanceSyncing())
+            {
+                await AppHealth.Current.Info.TrackAsync(StringRes.TemplatesSynchronizationWaitingOtherInstanceMessage);
+                await Task.Delay(instanceSyncWait);
+            }
+        }
+
+        private bool IsOtherInstanceSyncing()
+        {
+            try
+            {
+                FileInfo fileInfo = new FileInfo(Path.Combine(CurrentTemplatesFolder, ".lock"));
+                return fileInfo.Exists && DateTime.Now < fileInfo.CreationTime.Add(instanceMaxSyncWait);
+            }
+            catch (Exception ex)
+            {
+                AppHealth.Current.Warning.TrackAsync(StringRes.TemplatesSynchronizationWarnReadingLockFileMessage, ex).FireAndForget();
+
+                // No matter the exception. If there is one, we behave exactly the same as if we don't have instance syncronization exclusion.
+                return false;
+            }
+        }
+
+        private void SetInstanceSyncLock()
+        {
+            try
+            {
+                FileInfo fileInfo = new FileInfo(Path.Combine(CurrentTemplatesFolder, ".lock"));
+                if (fileInfo.Exists)
+                {
+                    fileInfo.Delete();
+                }
+
+                Fs.EnsureFolder(CurrentTemplatesFolder);
+                File.WriteAllText(fileInfo.FullName, "Instance syncing");
+            }
+            catch (Exception ex)
+            {
+                AppHealth.Current.Warning.TrackAsync(StringRes.TemplatesSynchronizationWarnCreatingLockFileMessage, ex).FireAndForget();
+            }
+        }
+
+        private void RemoveInstanceSyncLock()
+        {
+            try
+            {
+                FileInfo fileInfo = new FileInfo(Path.Combine(CurrentTemplatesFolder, ".lock"));
+                if (fileInfo.Exists)
+                {
+                    fileInfo.Delete();
+                }
+            }
+            catch (Exception ex)
+            {
+                AppHealth.Current.Warning.TrackAsync(StringRes.TemplatesSynchronizationWarnDeletingLockFileMessage, ex).FireAndForget();
             }
         }
     }

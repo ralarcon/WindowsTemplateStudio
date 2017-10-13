@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -22,7 +14,8 @@ using Microsoft.Templates.UI.Extensions;
 
 namespace Microsoft.Templates.UI.Services
 {
-    public partial class DragAndDropService<T> where T : class
+    public partial class DragAndDropService<T>
+        where T : class
     {
         public DragAndDropService(ListView listView)
         {
@@ -31,6 +24,7 @@ namespace Microsoft.Templates.UI.Services
             _indexToSelect = -1;
             _showDragAdornerLayer = true;
             _listView = listView;
+
             InitializeListView();
         }
 
@@ -151,7 +145,7 @@ namespace Microsoft.Templates.UI.Services
                 T data = e.Data.GetData(typeof(T)) as T;
                 if (data != null)
                 {
-                    var itemsSource = this._listView.ItemsSource as ObservableCollection<T>;
+                    var itemsSource = _listView.ItemsSource as ObservableCollection<T>;
                     if (itemsSource != null)
                     {
                         int oldIndex = itemsSource.IndexOf(data);
@@ -192,6 +186,7 @@ namespace Microsoft.Templates.UI.Services
                                 {
                                     itemsSource.Insert(newIndex, data);
                                 }
+
                                 e.Effects = DragDropEffects.Move;
                             }
                         }
@@ -219,7 +214,7 @@ namespace Microsoft.Templates.UI.Services
         private int GetIndexUnderDragCursor()
         {
             int index = -1;
-            for (int i = 0; i < this._listView.Items.Count; ++i)
+            for (int i = 0; i < _listView.Items.Count; ++i)
             {
                 var listViewItem = _listView.GetListViewItem(i);
                 if (IsMouseOver(listViewItem))
@@ -228,6 +223,7 @@ namespace Microsoft.Templates.UI.Services
                     break;
                 }
             }
+
             return index;
         }
 
@@ -237,13 +233,14 @@ namespace Microsoft.Templates.UI.Services
             {
                 return null;
             }
+
             return _listView.ItemContainerGenerator.ContainerFromItem(dataItem) as ListViewItem;
         }
 
         private AdornerLayer InitializeAdornerLayer(ListViewItem itemToDrag)
         {
             var brush = new VisualBrush(itemToDrag);
-            _dragAdornerLayer = new DragAdornerLayer(this._listView, itemToDrag.RenderSize, brush);
+            _dragAdornerLayer = new DragAdornerLayer(_listView, itemToDrag.RenderSize, brush);
             _dragAdornerLayer.Opacity = _dragAdornerLayerOpacity;
 
             var adornerLayer = AdornerLayer.GetAdornerLayer(_listView);
@@ -255,7 +252,7 @@ namespace Microsoft.Templates.UI.Services
 
         private void InitializeDragOperation(ListViewItem itemToDrag)
         {
-            this._canInitiateDrag = false;
+            _canInitiateDrag = false;
             ListViewItemDragState.SetIsBeingDragged(itemToDrag, true);
         }
 
@@ -283,7 +280,7 @@ namespace Microsoft.Templates.UI.Services
             {
                 var mousePosition = MouseUtilities.GetMousePosition(_listView);
 
-                double left = mousePosition.X - this._mouseDownPosition.X;
+                double left = mousePosition.X - _mouseDownPosition.X;
 
                 var itemBeingDragged = _listView.GetListViewItem(_indexToSelect);
                 var itemLoc = itemBeingDragged.TranslatePoint(new Point(0, 0), _listView);

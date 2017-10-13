@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Diagnostics;
@@ -25,7 +17,7 @@ namespace Microsoft.Templates.Core.Diagnostics
         public ExceptionTracker Exception { get; private set; }
         public TelemetryTracker Telemetry { get; private set; }
 
-        static AppHealth _current;
+        private static AppHealth _current;
         public static AppHealth Current
         {
             get
@@ -58,11 +50,15 @@ namespace Microsoft.Templates.Core.Diagnostics
 
         public void AddWriter(IHealthWriter newWriter)
         {
-            if (newWriter.AllowMultipleInstances() || !HealthWriters.Available.Where(w => w.GetType() == newWriter.GetType()).Any())
+            if (newWriter != null)
             {
-                HealthWriters.Available.Add(newWriter);
+                if (newWriter.AllowMultipleInstances() || !HealthWriters.Available.Where(w => w.GetType() == newWriter.GetType()).Any())
+                {
+                    HealthWriters.Available.Add(newWriter);
+                }
             }
         }
+
         private void InstanceDefaultWriters()
         {
             HealthWriters.Available.Add(FileHealthWriter.Current);
@@ -94,6 +90,7 @@ namespace Microsoft.Templates.Core.Diagnostics
                     }
                 }
             }
+
             // free native resources if any.
         }
     }

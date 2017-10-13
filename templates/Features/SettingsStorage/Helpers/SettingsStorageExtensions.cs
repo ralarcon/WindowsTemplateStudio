@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -7,17 +7,16 @@ using Windows.Storage.Streams;
 
 namespace Param_ItemNamespace.Helpers
 {
+    // Use these extension methods to store and retrieve local and roaming app data
+    // For more info regarding storing and retrieving app data see documentation at
+    // https://docs.microsoft.com/windows/uwp/app-settings/store-and-retrieve-app-data
     public static class SettingsStorageExtensions
     {
-        // Use this extension methods to store and retrieve in local and roaming app data
-        // For more info regarding storing and retrieving app data,
-        // Documentation: https://docs.microsoft.com/windows/uwp/app-settings/store-and-retrieve-app-data
-
-        private const string fileExtension = ".json";
+        private const string FileExtension = ".json";
 
         public static bool IsRoamingStorageAvailable(this ApplicationData appData)
         {
-            return (appData.RoamingStorageQuota == 0);
+            return appData.RoamingStorageQuota == 0;
         }
 
         public static async Task SaveAsync<T>(this StorageFolder folder, string name, T content)
@@ -43,7 +42,12 @@ namespace Param_ItemNamespace.Helpers
 
         public static async Task SaveAsync<T>(this ApplicationDataContainer settings, string key, T value)
         {
-            settings.Values[key] = await Json.StringifyAsync(value);
+            settings.SaveString(key, await Json.StringifyAsync(value));
+        }
+
+        public static void SaveString(this ApplicationDataContainer settings, string key, string value)
+        {
+            settings.Values[key] = value;
         }
 
         public static async Task<T> ReadAsync<T>(this ApplicationDataContainer settings, string key)
@@ -58,16 +62,16 @@ namespace Param_ItemNamespace.Helpers
             return default(T);
         }
 
-         public static async Task<StorageFile> SaveFileAsync(this StorageFolder folder, byte[] content, string fileName, CreationCollisionOption options = CreationCollisionOption.ReplaceExisting)
+        public static async Task<StorageFile> SaveFileAsync(this StorageFolder folder, byte[] content, string fileName, CreationCollisionOption options = CreationCollisionOption.ReplaceExisting)
         {
-            if(content == null)
+            if (content == null)
             {
-                throw new ArgumentNullException("content");
+                throw new ArgumentNullException(nameof(content));
             }
 
             if (string.IsNullOrEmpty(fileName))
             {
-                throw new ArgumentException("File name is null or empty. Specify a valid file name", "fileName");
+                throw new ArgumentException("ExceptionSettingsStorageExtensionsFileNameIsNullOrEmpty".GetLocalized(), nameof(fileName));
             }
 
             var storageFile = await folder.CreateFileAsync(fileName, options);
@@ -79,7 +83,7 @@ namespace Param_ItemNamespace.Helpers
         {
             var item = await folder.TryGetItemAsync(fileName).AsTask().ConfigureAwait(false);
 
-            if((item != null) && item.IsOfType(StorageItemTypes.File))
+            if ((item != null) && item.IsOfType(StorageItemTypes.File))
             {
                 var storageFile = await folder.GetFileAsync(fileName);
                 byte[] content = await storageFile.ReadBytesAsync();
@@ -93,7 +97,6 @@ namespace Param_ItemNamespace.Helpers
         {
             if (file != null)
             {
-
                 using (IRandomAccessStream stream = await file.OpenReadAsync())
                 {
                     using (var reader = new DataReader(stream.GetInputStreamAt(0)))
@@ -111,7 +114,7 @@ namespace Param_ItemNamespace.Helpers
 
         private static string GetFileName(string name)
         {
-            return string.Concat(name, fileExtension);
+            return string.Concat(name, FileExtension);
         }
     }
 }

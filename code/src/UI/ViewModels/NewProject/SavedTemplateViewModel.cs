@@ -1,14 +1,6 @@
-﻿// ******************************************************************
-// Copyright (c) Microsoft. All rights reserved.
-// This code is licensed under the MIT License (MIT).
-// THE CODE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
-// THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
-// ******************************************************************
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -20,13 +12,16 @@ using System.Windows.Threading;
 using Microsoft.Templates.Core.Mvvm;
 using Microsoft.Templates.Core;
 using Microsoft.TemplateEngine.Abstractions;
+using Microsoft.Templates.UI.Services;
+using Microsoft.Templates.UI.Extensions;
+using Microsoft.Templates.Core.Diagnostics;
+using Microsoft.Templates.UI.Resources;
+using Microsoft.Templates.UI.ViewModels.Common;
 
 namespace Microsoft.Templates.UI.ViewModels.NewProject
 {
     public class SavedTemplateViewModel : Observable
     {
-        #region TemplatesProperties
-
         private ITemplateInfo _template;
 #pragma warning disable SA1008 // Opening parenthesis must be spaced correctly - StyleCop can't handle Tuples
         public (string name, ITemplateInfo template) UserSelection => (ItemName, _template);
@@ -47,11 +42,12 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
             {
                 SetProperty(ref _itemName, value);
                 OnPropertyChanged("DisplayText");
-                ItemForeground = MainViewModel.Current.MainView.FindResource("UIBlue") as SolidColorBrush;
-                AuthorForeground = MainViewModel.Current.MainView.FindResource("UIBlue") as SolidColorBrush;
+                ItemForeground = GetItemForeground(true);
+                AuthorForeground = GetAuthorForeground(true);
                 colorTimer.Start();
             }
         }
+
         private string _newItemName;
         public string NewItemName
         {
@@ -62,10 +58,20 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
             set
             {
                 SetProperty(ref _newItemName, value);
-                if (CanChooseItemName)
+                if (CanChooseItemName && NewItemName != ItemName)
                 {
-                    ValidateTemplateName?.Invoke(this);
+                    var validationResult = ValidationService.ValidateTemplateName(NewItemName, CanChooseItemName, true);
+                    IsValidName = validationResult.IsValid;
+                    ErrorMessage = string.Empty;
+                    if (!IsValidName)
+                    {
+                        ErrorMessage = validationResult.ErrorType.GetResourceString();
+                        MainViewModel.Current.SetValidationErrors(ErrorMessage);
+                        throw new Exception(ErrorMessage);
+                    }
                 }
+
+                MainViewModel.Current.CleanStatus(true);
             }
         }
 
@@ -74,6 +80,20 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
         {
             get => _canChooseItemName;
             set => SetProperty(ref _canChooseItemName, value);
+        }
+
+        private bool _isHidden;
+        public bool IsHidden
+        {
+            get => _isHidden;
+            set => SetProperty(ref _isHidden, value);
+        }
+
+        private bool _multipleInstance;
+        public bool MultipleInstance
+        {
+            get => _multipleInstance;
+            set => SetProperty(ref _multipleInstance, value);
         }
 
         private string _templateName;
@@ -138,9 +158,7 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
                 return !IsHome;
             }
         }
-        #endregion
 
-        #region UISummaryProperties
         private DispatcherTimer colorTimer = new DispatcherTimer() { Interval = TimeSpan.FromSeconds(2) };
 
         private bool _isEditionEnabled;
@@ -204,14 +222,14 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
             set => SetProperty(ref _isOpen, value);
         }
 
-        private Brush _itemForeground = MainViewModel.Current.MainView.FindResource("UIBlue") as SolidColorBrush;
+        private Brush _itemForeground;
         public Brush ItemForeground
         {
             get => _itemForeground;
             set => SetProperty(ref _itemForeground, value);
         }
 
-        private Brush _authorForeground = MainViewModel.Current.MainView.FindResource("UIBlue") as SolidColorBrush;
+        private Brush _authorForeground;
         public Brush AuthorForeground
         {
             get => _authorForeground;
@@ -220,23 +238,22 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
 
         public string DisplayText => CanChooseItemName ? $"{ItemName} [{TemplateName}]" : ItemName;
 
-        public ICommand OpenCommand { get; set; }
+        private ICommand _openCommand;
+        public ICommand OpenCommand => _openCommand ?? (_openCommand = new RelayCommand(OnOpen));
 
-        public ICommand RemoveCommand { get; set; }
+        private ICommand _removeCommand;
+        public ICommand RemoveCommand => _removeCommand ?? (_removeCommand = new RelayCommand(OnRemove));
 
-        public ICommand RenameCommand { get; set; }
+        private ICommand _renameCommand;
+        public ICommand RenameCommand => _renameCommand ?? (_renameCommand = new RelayCommand(OnRename));
 
-        public ICommand ConfirmRenameCommand { get; set; }
+        private ICommand _confirmRenameCommand;
+        public ICommand ConfirmRenameCommand => _confirmRenameCommand ?? (_confirmRenameCommand = new RelayCommand(OnConfirmRename));
 
-        public Action<SavedTemplateViewModel> ValidateTemplateName;
+        private ICommand _cancelRenameCommand;
+        public ICommand CancelRenameCommand => _cancelRenameCommand ?? (_cancelRenameCommand = new RelayCommand(() => CancelRename()));
 
-        public ICommand _cancelRenameCommand;
-        public ICommand CancelRenameCommand => _cancelRenameCommand ?? (_cancelRenameCommand = new RelayCommand(CancelRenameAction));
-
-        public Action CancelRenameAction => OnCancelRename;
-        #endregion
-
-        public SavedTemplateViewModel((string name, ITemplateInfo template) item, bool isRemoveEnabled, ICommand openCommand, ICommand removeTemplateCommand, ICommand renameItemCommand, ICommand confirmRenameCommand, Action<SavedTemplateViewModel> validateCurrentTemplateName)
+        public SavedTemplateViewModel((string name, ITemplateInfo template) item, bool isRemoveEnabled)
         {
             _template = item.template;
             colorTimer.Tick += OnColorTimerTick;
@@ -248,29 +265,29 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
             CanChooseItemName = item.template.GetItemNameEditable();
             Identity = item.template.Identity;
             TemplateName = item.template.Name;
+            IsHidden = item.template.GetIsHidden();
+            MultipleInstance = item.template.GetMultipleInstance();
             DependencyList = item.template.GetDependencyList();
             IsRemoveEnabled = isRemoveEnabled;
-            OpenCommand = openCommand;
-            RemoveCommand = removeTemplateCommand;
-            RenameCommand = renameItemCommand;
-            ConfirmRenameCommand = confirmRenameCommand;
-            ValidateTemplateName = validateCurrentTemplateName;
+
+            ItemForeground = GetItemForeground(true);
+            AuthorForeground = GetAuthorForeground(true);
             AllowDragAndDrop = false;
         }
 
         private void OnColorTimerTick(object sender, EventArgs e)
         {
-            ItemForeground = MainViewModel.Current.MainView.FindResource("UIBlack") as SolidColorBrush;
-            AuthorForeground = MainViewModel.Current.MainView.FindResource("UIGray") as SolidColorBrush;
+            ItemForeground = GetItemForeground(false);
+            AuthorForeground = GetAuthorForeground(false);
 
             colorTimer.Stop();
         }
 
-        internal void TryClose(bool force = false)
+        internal void Close()
         {
             if (IsOpen)
             {
-                 IsOpen = false;
+                IsOpen = false;
             }
         }
 
@@ -287,7 +304,7 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
             }
         }
 
-        public void OnCancelRename()
+        public void CancelRename()
         {
             if (IsEditionEnabled)
             {
@@ -296,6 +313,109 @@ namespace Microsoft.Templates.UI.ViewModels.NewProject
                 OnPropertyChanged("NewItemName");
                 MainViewModel.Current.CleanStatus(true);
             }
+        }
+
+        private SolidColorBrush GetItemForeground(bool isNewAdded)
+        {
+            if (SystemService.Instance.IsHighContrast)
+            {
+                return SystemColors.ControlTextBrush;
+            }
+            else
+            {
+                if (isNewAdded)
+                {
+                    return ResourceService.FindResource<SolidColorBrush>("UIBlue");
+                }
+                else
+                {
+                    return ResourceService.FindResource<SolidColorBrush>("UIBlack");
+                }
+            }
+        }
+
+        private SolidColorBrush GetAuthorForeground(bool isNewAdded)
+        {
+            if (SystemService.Instance.IsHighContrast)
+            {
+                return SystemColors.ControlTextBrush;
+            }
+            else
+            {
+                if (isNewAdded)
+                {
+                    return ResourceService.FindResource<SolidColorBrush>("UIBlue");
+                }
+                else
+                {
+                    return ResourceService.FindResource<SolidColorBrush>("UIGray");
+                }
+            }
+        }
+
+        private void OnOpen()
+        {
+            if (!IsOpen)
+            {
+                MainViewModel.Current.ProjectTemplates.CloseAllButThis(this);
+                IsOpen = true;
+            }
+            else
+            {
+                Close();
+            }
+        }
+
+        private void OnRename()
+        {
+            MainViewModel.Current.ProjectTemplates.CancelAllRenaming();
+            IsEditionEnabled = true;
+            Close();
+        }
+
+        private void OnRemove()
+        {
+            var dependency = UserSelectionService.RemoveTemplate(this);
+            if (dependency != null)
+            {
+                string message = string.Format(StringRes.ValidationError_CanNotRemoveTemplate_SF, this.TemplateName, dependency.TemplateName, dependency.TemplateType);
+                MainViewModel.Current.WizardStatus.SetStatus(StatusViewModel.Warning(message, false, 5));
+            }
+            else
+            {
+                MainViewModel.Current.FinishCommand.OnCanExecuteChanged();
+                MainViewModel.Current.ProjectTemplates.UpdateTemplatesAvailability();
+                MainViewModel.Current.ProjectTemplates.UpdateHasPagesAndHasFeatures();
+                MainViewModel.Current.RebuildLicenses();
+            }
+        }
+
+        private void OnConfirmRename()
+        {
+            if (NewItemName == ItemName)
+            {
+                IsEditionEnabled = false;
+                return;
+            }
+
+            if (ValidationService.ValidateTemplateName(NewItemName, CanChooseItemName, true).IsValid)
+            {
+                ItemName = NewItemName;
+
+                if (IsHome)
+                {
+                    UserSelectionService.HomeName = ItemName;
+                }
+
+                AppHealth.Current.Telemetry.TrackEditSummaryItemAsync(EditItemActionEnum.Rename).FireAndForget();
+            }
+            else
+            {
+                NewItemName = ItemName;
+            }
+
+            IsEditionEnabled = false;
+            MainViewModel.Current.CleanStatus(true);
         }
     }
 }
