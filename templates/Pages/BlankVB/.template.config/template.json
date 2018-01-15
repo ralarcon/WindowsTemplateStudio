@@ -1,5 +1,5 @@
 ﻿{
-  "author": "Microsoft Community Contribution",
+  "author": "Microsoft Community",
   "classifications": [
     "Universal"
   ],
@@ -45,7 +45,7 @@
     },
     "setter": {
       "type": "parameter",
-      "replaces": "Set"
+      "replaces": "Param_Setter"
     }
   }
 }

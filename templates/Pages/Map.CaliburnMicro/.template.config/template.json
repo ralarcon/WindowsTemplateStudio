@@ -1,5 +1,5 @@
 ﻿{
-  "author": "Nigel Sampson",
+  "author": "Microsoft Community",
   "classifications": [ "Universal" ],
   "name": "Map",
   "groupIdentity": "wts.Page.Map",
@@ -41,7 +41,7 @@
     },
     "setter": {
       "type": "parameter",
-      "replaces": "Set"
+      "replaces": "Param_Setter"
     }
   }
 }

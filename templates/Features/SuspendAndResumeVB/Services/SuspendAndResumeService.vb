@@ -1,9 +1,4 @@
-﻿Imports System
-Imports System.Threading.Tasks
-
-Imports Windows.ApplicationModel.Activation
-Imports Windows.Storage
-Imports Windows.UI.Xaml.Controls
+﻿Imports Windows.Storage
 
 Imports Param_RootNamespace.Activation
 Imports Param_RootNamespace.Helpers
@@ -28,7 +23,7 @@ Namespace Services
             Dim target As Type = Nothing
             
             If OnBackgroundEnteringEvent IsNot Nothing Then
-                target = OnBackgroundEnteringEvent.Target.GetType()
+                target = OnBackgroundEnteringEvent.Target.GetType
             End If
 
             Dim onBackgroundEnteringArgs = New OnBackgroundEnteringEventArgs(suspensionState, target)

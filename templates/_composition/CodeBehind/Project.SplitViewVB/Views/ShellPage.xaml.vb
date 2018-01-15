@@ -1,12 +1,5 @@
 ﻿Imports wts.ItemName.Services
 Imports wts.ItemName.Helpers
-Imports System.Collections.ObjectModel
-Imports System.Linq
-Imports System.ComponentModel
-Imports System.Runtime.CompilerServices
-Imports Windows.UI.Xaml
-Imports Windows.UI.Xaml.Controls
-Imports Windows.UI.Xaml.Navigation
 
 Namespace Views
     Public NotInheritable Partial Class ShellPage
@@ -20,7 +13,7 @@ Namespace Views
         Private Const PanoramicStateMinWindowWidth As Double = 1024
 
         Private _isPaneOpen As Boolean
-        Public Property IsPaneOpen() As Boolean
+        Public Property IsPaneOpen As Boolean
             Get
                 Return _isPaneOpen
             End Get
@@ -30,7 +23,7 @@ Namespace Views
         End Property
 
         Private _displayMode As SplitViewDisplayMode = SplitViewDisplayMode.CompactInline
-        Public Property DisplayMode() As SplitViewDisplayMode
+        Public Property DisplayMode As SplitViewDisplayMode
             Get
                 Return _displayMode
             End Get
@@ -42,23 +35,17 @@ Namespace Views
         Private _lastSelectedItem As Object
 
         Private _primaryItems As New ObservableCollection(Of ShellNavigationItem)()
-        Public Property PrimaryItems() As ObservableCollection(Of ShellNavigationItem)
+        Public ReadOnly Property PrimaryItems() As ObservableCollection(Of ShellNavigationItem)
             Get
                 Return _primaryItems
             End Get
-            Set
-                [Set](_primaryItems, value)
-            End Set
         End Property
 
         Private _secondaryItems As New ObservableCollection(Of ShellNavigationItem)()
-        Public Property SecondaryItems() As ObservableCollection(Of ShellNavigationItem)
+        Public ReadOnly Property SecondaryItems() As ObservableCollection(Of ShellNavigationItem)
             Get
                 Return _secondaryItems
             End Get
-            Set
-                [Set](_secondaryItems, value)
-            End Set
         End Property
 
         Public Sub New()
@@ -89,7 +76,9 @@ Namespace Views
             _primaryItems.Clear()
             _secondaryItems.Clear()
 
+            ' TODO WTS: Change the symbols for each item as appropriate for your app
             ' More on Segoe UI Symbol icons: https://docs.microsoft.com/windows/uwp/style/segoe-ui-symbol-font
+            ' Or to use an IconElement instead of a Symbol see https://github.com/Microsoft/WindowsTemplateStudio/blob/master/docs/projectTypes/navigationpane.md
             ' Edit String/en-US/Resources.resw: Add a menu item title for each page
         End Sub
 
@@ -100,7 +89,7 @@ Namespace Views
                 navigationitem = PrimaryItems.FirstOrDefault(Function(i as ShellNavigationItem) i.PageType.Equals(e.SourcePageType))
             End If
             
-            If navigationItem Is Nothing And SecondaryItems IsNot Nothing Then
+            If navigationItem Is Nothing AndAlso SecondaryItems IsNot Nothing Then
                 navigationItem = SecondaryItems.FirstOrDefault(Function(i as ShellNavigationItem) i.PageType.Equals(e.SourcePageType))
             End If
 
